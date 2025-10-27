@@ -30,11 +30,11 @@ app = FastAPI(lifespan=lifespan)
 
 async def handle_event(event: str):
     if event == "VOLUME_UP":
-        volume = camilla.volume.main_volume() + 1
+        volume = camilla.volume.main_volume() + 0.5
         camilla.volume.set_main_volume(0 if volume > 0 else volume)
 
     elif event == "VOLUME_DOWN":
-        volume = camilla.volume.main_volume() - 1
+        volume = camilla.volume.main_volume() - 0.5
         camilla.volume.set_main_volume(-50 if volume < -50 else volume)
 
     elif event == "MUTE":

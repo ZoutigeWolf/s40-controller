@@ -25,6 +25,8 @@ pydantic==2.12.3
 pydantic_core==2.41.4
 pydbus==0.6.0
 Pygments==2.19.2
+pyserial==3.5
+pyserial-asyncio==0.6
 python-dotenv==1.1.1
 python-multipart==0.0.20
 PyYAML==6.0.3

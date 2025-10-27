@@ -2,13 +2,59 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response
 from camilladsp import CamillaClient, CamillaError
+from contextlib import asynccontextmanager
+import asyncio
+import serial_asyncio
 
 load_dotenv()
 
-app = FastAPI()
-
 camilla = CamillaClient(os.getenv("CAMILLA_HOST"), int(os.getenv("CAMILLA_PORT")))
 camilla.connect()
+
+SERIAL_PORT = "/dev/ttyUSB0"
+BAUD_RATE = 115200
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    task = asyncio.create_task(read_serial())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+app = FastAPI(lifespan=lifespan)
+
+async def handle_event(event: str):
+    if event == "VOLUME_UP":
+        volume = camilla.volume.main_volume() + 1
+        camilla.volume.set_main_volume(0 if volume > 0 else volume)
+
+    elif event == "VOLUME_DOWN":
+        volume = camilla.volume.main_volume() - 1
+        camilla.volume.set_main_volume(-50 if volume < -50 else volume)
+
+    elif event == "MUTE":
+        muted = camilla.volume.main_mute()
+        camilla.volume.set_main_mute(not muted)
+
+    else:
+        print(f"Unknown event: {event}")
+
+async def read_serial():
+    reader, _ = await serial_asyncio.open_serial_connection(
+        url=SERIAL_PORT, baudrate=BAUD_RATE
+    )
+    while True:
+        line = await reader.readline()
+        if not line:
+            continue
+        event = line.decode().strip()
+        await handle_event(event)
+
 
 @app.get("/config")
 async def get_config():
@@ -35,27 +81,3 @@ async def get_devices():
         "capture": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[1]},
         "playback": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[0]}
     }
-
-
-@app.post("/control/volume-up")
-async def control_volume_up():
-    volume = camilla.volume.main_volume()
-    if volume >= 0:
-        return
-
-    camilla.volume.set_main_volume(volume + 1)
-
-
-@app.post("/control/volume-down")
-async def control_volume_down():
-    volume = camilla.volume.main_volume()
-    if volume <= -50:
-        return
-
-    camilla.volume.set_main_volume(volume - 1)
-
-
-@app.post("/control/mute")
-async def control_mute():
-    mute = camilla.volume.main_mute()
-    camilla.volume.set_main_mute(not mute)

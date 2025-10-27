@@ -11,8 +11,8 @@ app = FastAPI()
 camilla = CamillaClient(os.getenv("CAMILLA_HOST"), int(os.getenv("CAMILLA_PORT")))
 camilla.connect()
 
-encoder = RotaryEncoder(a=14, b=15, max_steps=0)
-button = Button(17)
+encoder = RotaryEncoder(a=9, b=10, max_steps=0)
+button = Button(11)
 
 def on_encoder_rotate_cw():
     volume = camilla.volume.main_volume()

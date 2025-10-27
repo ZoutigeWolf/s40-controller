@@ -40,12 +40,18 @@ async def get_devices():
 @app.post("/control/volume-up")
 async def control_volume_up():
     volume = camilla.volume.main_volume()
+    if volume >= 0:
+        return
+
     camilla.volume.set_main_volume(volume + 1)
 
 
 @app.post("/control/volume-down")
 async def control_volume_down():
     volume = camilla.volume.main_volume()
+    if volume <= -50:
+        return
+
     camilla.volume.set_main_volume(volume - 1)
 
 

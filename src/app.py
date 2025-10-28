@@ -14,7 +14,7 @@ camilla.connect()
 SERIAL_PORT = "/dev/ttyUSB0"
 BAUD_RATE = 115200
 
-power_state = True
+power_state = False
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):

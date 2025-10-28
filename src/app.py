@@ -14,6 +14,8 @@ camilla.connect()
 SERIAL_PORT = "/dev/ttyUSB0"
 BAUD_RATE = 115200
 
+power_state = True
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     task = asyncio.create_task(read_serial())
@@ -29,6 +31,8 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 async def handle_event(event: str):
+    global power_state
+
     if event == "VOLUME_UP":
         volume = camilla.volume.main_volume() + 1
         camilla.volume.set_main_volume(0 if volume > 0 else volume)
@@ -40,6 +44,12 @@ async def handle_event(event: str):
     elif event == "MUTE":
         muted = camilla.volume.main_mute()
         camilla.volume.set_main_mute(not muted)
+
+    elif event == "POWER_ON":
+        power_state = True
+
+    elif event == "POWER_OFF":
+        power_state = False
 
     else:
         print(f"Unknown event: {event}")
@@ -54,6 +64,10 @@ async def read_serial():
             continue
         event = line.decode().strip()
         await handle_event(event)
+
+@app.get("/power")
+async def power():
+    return power_state
 
 
 @app.get("/config")

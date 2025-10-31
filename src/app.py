@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response, Depends
+from fastapi import FastAPI, Response
 from camilladsp import CamillaClient, CamillaError
 from contextlib import asynccontextmanager
 import asyncio
@@ -11,115 +11,86 @@ from avrcp import AVRCPClient
 
 load_dotenv()
 
+# -------------------------------
+# Camilla & AVRCP clients
+# -------------------------------
 camilla = CamillaClient(os.getenv("CAMILLA_HOST"), int(os.getenv("CAMILLA_PORT")))
 camilla.connect()
-
 avrcp = AVRCPClient()
-
-SERIAL_PORT = "/dev/ttyUSB0"
-BAUD_RATE = 115200
 
 power_state = False
 
+# -------------------------------
+# Serial connection wrapper
+# -------------------------------
 class SerialConnection:
     def __init__(self, port: str, baudrate: int):
         self.port = port
         self.baudrate = baudrate
         self.reader = None
         self.writer = None
+        self.available = False
 
-    async def init(self) -> bool:
+    async def init(self):
+        if self.available:
+            return True
         try:
             self.reader, self.writer = await serial_asyncio.open_serial_connection(
                 url=self.port, baudrate=self.baudrate
             )
-
+            self.available = True
+            print(f"[Serial] Connected to {self.port}")
             return True
-
-        except SerialException:
-            self.reader = None
-            self.writer = None
-
+        except (SerialException, FileNotFoundError):
+            self.available = False
+            print(f"[Serial] Not available: {self.port}")
             return False
 
     async def send(self, msg: str):
-        if self.writer is None:
-            res = await self.init()
-            if not res:
+        if not self.available:
+            # Try to init, but don't block startup
+            await self.init()
+            if not self.available:
                 return
-
-        self.writer.write((msg + "\n").encode())
-        await self.writer.drain()
+        try:
+            self.writer.write((msg + "\n").encode())
+            await self.writer.drain()
+        except Exception as e:
+            print(f"[Serial] Send error: {e}")
+            self.available = False
 
     async def read_line(self) -> str:
-        if self.reader is None:
-            res = await self.init()
-
-            if not res:
+        if not self.available:
+            # Try to init
+            await self.init()
+            if not self.available:
+                await asyncio.sleep(0.5)
                 return ""
-
-        return await self.reader.readline().decode()
-
-
-serial_conn = SerialConnection(SERIAL_PORT, BAUD_RATE)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await serial_conn.init()
-
-    serial_task = asyncio.create_task(read_serial(serial_conn))
-    avrcp_task = asyncio.create_task(send_avrcp_periodically(serial_conn))
-
-    try:
-        yield
-    finally:
-        serial_task.cancel()
-        avrcp_task.cancel()
         try:
-            await serial_task
-        except asyncio.CancelledError:
-            pass
-        try:
-            await avrcp_task
-        except asyncio.CancelledError:
-            pass
+            line = await asyncio.wait_for(self.reader.readline(), timeout=0.5)
+            return line.decode()
+        except asyncio.TimeoutError:
+            return ""
+        except Exception as e:
+            print(f"[Serial] Read error: {e}")
+            self.available = False
+            return ""
 
 
-app = FastAPI(lifespan=lifespan)
+serial_conn = SerialConnection("/dev/ttyUSB0", 115200)
 
-async def handle_event(event: str):
-    global power_state
-
-    if event == "VOLUME_UP":
-        volume = camilla.volume.main_volume() + 1
-        camilla.volume.set_main_volume(0 if volume > 0 else volume)
-
-    elif event == "VOLUME_DOWN":
-        volume = camilla.volume.main_volume() - 1
-        camilla.volume.set_main_volume(-50 if volume < -50 else volume)
-
-    elif event == "MUTE":
-        muted = camilla.volume.main_mute()
-        camilla.volume.set_main_mute(not muted)
-
-    elif event == "POWER_ON":
-        power_state = True
-
-    elif event == "POWER_OFF":
-        power_state = False
-
-    else:
-        print(f"Unknown event: {event}")
-
+# -------------------------------
+# Background tasks
+# -------------------------------
 async def read_serial(serial: SerialConnection):
     while True:
         line = await serial.read_line()
         if not line:
+            await asyncio.sleep(0.1)
             continue
-
         event = line.strip()
-
         await handle_event(event)
+
 
 async def send_avrcp_periodically(serial: SerialConnection):
     while True:
@@ -141,30 +112,68 @@ async def send_avrcp_periodically(serial: SerialConnection):
 
         await asyncio.sleep(0.5)
 
+# -------------------------------
+# FastAPI lifespan
+# -------------------------------
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    tasks = []
+    try:
+        # Start background tasks without blocking startup
+        tasks.append(asyncio.create_task(read_serial(serial_conn)))
+        tasks.append(asyncio.create_task(send_avrcp_periodically(serial_conn)))
+        yield
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+# -------------------------------
+# FastAPI app
+# -------------------------------
+app = FastAPI(lifespan=lifespan)
+
+async def handle_event(event: str):
+    global power_state
+    if event == "VOLUME_UP":
+        volume = camilla.volume.main_volume() + 1
+        camilla.volume.set_main_volume(0 if volume > 0 else volume)
+    elif event == "VOLUME_DOWN":
+        volume = camilla.volume.main_volume() - 1
+        camilla.volume.set_main_volume(-50 if volume < -50 else volume)
+    elif event == "MUTE":
+        muted = camilla.volume.main_mute()
+        camilla.volume.set_main_mute(not muted)
+    elif event == "POWER_ON":
+        power_state = True
+    elif event == "POWER_OFF":
+        power_state = False
+    else:
+        print(f"Unknown event: {event}")
+
+# -------------------------------
+# API endpoints
+# -------------------------------
 @app.get("/now-playing")
 async def now_playing():
     return avrcp.get_current()
-
 
 @app.get("/power")
 async def power():
     return power_state
 
-
 @app.get("/config")
 async def get_config():
     return camilla.config.active()
 
-
 @app.post("/config")
 async def set_config(config: dict):
     try:
-        config = camilla.config.validate(config)
-        camilla.config.set_active(config)
-        return config
+        cfg = camilla.config.validate(config)
+        camilla.config.set_active(cfg)
+        return cfg
     except CamillaError:
         return Response(status_code=400)
-
 
 @app.get("/devices")
 async def get_devices():
@@ -173,10 +182,3 @@ async def get_devices():
         "capture": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[1]},
         "playback": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[0]}
     }
-
-
-# -------------------------------
-# Example: send serial message anywhere via dependency
-# -------------------------------
-async def send_example(msg: str, serial: SerialConnection = Depends(lambda: serial_conn)):
-    await serial.send(msg)

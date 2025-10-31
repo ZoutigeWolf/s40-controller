@@ -35,7 +35,7 @@ async def send_avrcp_periodically(serial: SerialConnection):
                 title = data["track"].get("Title", "")
                 artist = data["track"].get("Artist", "")
                 duration = data["track"].get("Duration", 0)
-                position = data.get("Position", 0)
+                position = data.get("position", 0)
 
                 print(title)
                 print(artist)

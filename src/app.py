@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Depends
 from camilladsp import CamillaClient, CamillaError
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
 import asyncio
 import serial_asyncio
 
@@ -20,9 +20,37 @@ BAUD_RATE = 115200
 
 power_state = False
 
+class SerialConnection:
+    def __init__(self, port: str, baudrate: int):
+        self.port = port
+        self.baudrate = baudrate
+        self.reader = None
+        self.writer = None
+
+    async def init(self):
+        if self.reader is None or self.writer is None:
+            self.reader, self.writer = await serial_asyncio.open_serial_connection(
+                url=self.port, baudrate=self.baudrate
+            )
+
+    async def send(self, msg: str):
+        if self.writer is None:
+            await self.init()
+        self.writer.write((msg + "\n").encode())
+        await self.writer.drain()
+
+    async def read_line(self):
+        if self.reader is None:
+            await self.init()
+        return await self.reader.readline()
+
+
+serial_conn = SerialConnection(SERIAL_PORT, BAUD_RATE)
+
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    task = asyncio.create_task(read_serial())
+async def lifespan(app: FastAPI):
+    await serial_conn.init()
+    task = asyncio.create_task(read_serial(serial_conn))
     try:
         yield
     finally:
@@ -31,6 +59,7 @@ async def lifespan(_: FastAPI):
             await task
         except asyncio.CancelledError:
             pass
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -58,20 +87,38 @@ async def handle_event(event: str):
     else:
         print(f"Unknown event: {event}")
 
-async def read_serial():
-    reader, _ = await serial_asyncio.open_serial_connection(
-        url=SERIAL_PORT, baudrate=BAUD_RATE
-    )
+async def read_serial(serial: SerialConnection):
     while True:
-        line = await reader.readline()
+        line = await serial.read_line()
         if not line:
             continue
         event = line.decode().strip()
         await handle_event(event)
 
+async def send_avrcp_periodically(serial: SerialConnection):
+    while True:
+        try:
+            track = avrcp.get_current()
+            if track:
+                title = track.get("Title", "")
+                artist = track.get("Artist", "")
+                duration = track.get("Duration", 0)
+                position = track.get("Position", 0)
+
+                await serial.send(f"SET_TRACK;TITLE;{title}")
+                await serial.send(f"SET_TRACK;ARTIST;{artist}")
+                await serial.send(f"SET_TRACK;DURATION;{duration}")
+                await serial.send(f"SET_TRACK;ELAPSED;{position}")
+
+        except Exception as e:
+            print("AVRCP error:", e)
+
+        await asyncio.sleep(0.5)
+
 @app.get("/now-playing")
 async def now_playing():
     return avrcp.get_current()
+
 
 @app.get("/power")
 async def power():
@@ -88,9 +135,7 @@ async def set_config(config: dict):
     try:
         config = camilla.config.validate(config)
         camilla.config.set_active(config)
-
         return config
-
     except CamillaError:
         return Response(status_code=400)
 
@@ -98,8 +143,14 @@ async def set_config(config: dict):
 @app.get("/devices")
 async def get_devices():
     types = camilla.general.supported_device_types()
-
     return {
         "capture": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[1]},
         "playback": {t: [d[0] for d in camilla.general.list_capture_devices(t)] for t in types[0]}
     }
+
+
+# -------------------------------
+# Example: send serial message anywhere via dependency
+# -------------------------------
+async def send_example(msg: str, serial: SerialConnection = Depends(lambda: serial_conn)):
+    await serial.send(msg)

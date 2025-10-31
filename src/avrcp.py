@@ -28,6 +28,7 @@ class AVRCPClient:
         self.player.Previous()
 
     def get_current(self):
+        print(self.player)
         return self.player
     
         return {

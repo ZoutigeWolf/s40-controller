@@ -2,9 +2,10 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, Depends
 from camilladsp import CamillaClient, CamillaError
-from contextlib import asynccontextmanager, AsyncExitStack
+from contextlib import asynccontextmanager
 import asyncio
 import serial_asyncio
+from serial import SerialException
 
 from avrcp import AVRCPClient
 
@@ -27,22 +28,37 @@ class SerialConnection:
         self.reader = None
         self.writer = None
 
-    async def init(self):
-        if self.reader is None or self.writer is None:
+    async def init(self) -> bool:
+        try:
             self.reader, self.writer = await serial_asyncio.open_serial_connection(
                 url=self.port, baudrate=self.baudrate
             )
 
+            return True
+
+        except SerialException:
+            self.reader = None
+            self.writer = None
+
+            return False
+
     async def send(self, msg: str):
         if self.writer is None:
-            await self.init()
+            res = await self.init()
+            if not res:
+                return
+
         self.writer.write((msg + "\n").encode())
         await self.writer.drain()
 
-    async def read_line(self):
+    async def read_line(self) -> str:
         if self.reader is None:
-            await self.init()
-        return await self.reader.readline()
+            res = await self.init()
+
+            if not res:
+                return ""
+
+        return await self.reader.readline().decode()
 
 
 serial_conn = SerialConnection(SERIAL_PORT, BAUD_RATE)
@@ -92,7 +108,9 @@ async def read_serial(serial: SerialConnection):
         line = await serial.read_line()
         if not line:
             continue
-        event = line.decode().strip()
+
+        event = line.strip()
+
         await handle_event(event)
 
 async def send_avrcp_periodically(serial: SerialConnection):

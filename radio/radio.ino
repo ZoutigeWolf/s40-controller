@@ -1,4 +1,7 @@
 #include <ESP32Encoder.h>
+#include <U8g2lib.h>
+#include <Wire.h>
+#include <string.h>
 
 enum AccessoryPower {
   OFF,
@@ -7,10 +10,11 @@ enum AccessoryPower {
 };
 
 ESP32Encoder encoder;
+U8G2_SH1122_256X64_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
-const int pinA = 22;   // encoder A
-const int pinB = 23;   // encoder B
-const int buttonPin = 21;
+const int pinA = 19;
+const int pinB = 18;
+const int buttonPin = 5;
 const int optoPin = 12;
 const int relay0Pin = 26;
 const int relay1Pin = 27;
@@ -22,9 +26,18 @@ AccessoryPower accessoryPowerState = AUTO;
 long powerGracePeriod = 10;
 float powerTimer = 0;
 
+String track_title = "";
+String track_artist= "";
+long track_duration = 0;
+long track_elapsed = 0;
+
 void setup() {
   Serial.begin(115200);
   Serial.setTimeout(20);
+
+  Wire.begin(21, 22);
+  
+  u8g2.begin();
 
   // Encoder setup
   ESP32Encoder::useInternalWeakPullResistors = puType::up;
@@ -51,7 +64,35 @@ void loop() {
   handleOpto();
   handlePowerState();
   handleSerial();
+  updateDisplay();
   delay(5);
+}
+
+void updateDisplay() {
+  u8g2.clearBuffer();
+
+  u8g2.setFont(u8g2_font_6x10_mf);
+  u8g2.drawStr(0, 8, "13.2 V  AUTO  UP");
+
+  u8g2.setFont(u8g2_font_10x20_mf);
+  u8g2.drawStr(0, 30, track_title.c_str());
+
+  u8g2.setFont(u8g2_font_7x13_mf);
+  u8g2.drawStr(0, 48, track_artist.c_str());
+
+  String elapsed = msToTime(track_elapsed);
+  u8g2.setFont(u8g2_font_5x7_mf);
+  u8g2.drawStr(0, 61, elapsed.c_str());
+
+  String duration = msToTime(track_duration);
+  int len = u8g2.getStrWidth(duration.c_str());
+  u8g2.setFont(u8g2_font_5x7_mf);
+  u8g2.drawStr(256 - len, 61, duration.c_str());
+
+  int width = map(track_elapsed, 0, track_duration, 0, 256);
+  u8g2.drawBox(0, 63, width, 1);
+
+  u8g2.sendBuffer();
 }
 
 void handlePowerTimer() {
@@ -131,6 +172,19 @@ void processCommand(const String &cmd) {
     if (period < 0) period = 0;
 
     powerGracePeriod = period;
+  } else if (cmd.startsWith("SET_TRACK;")) {
+    String action = cmd.substring(10);
+
+    if (action.startsWith("TITLE;")) {
+      track_title = action.substring(6);
+
+    } else if (action.startsWith("ARTIST;")) {
+      track_artist = action.substring(7);
+    } else if (action.startsWith("ELAPSED;")) {
+      track_elapsed = action.substring(8).toInt();
+    } else if (action.startsWith("DURATION;")) {
+      track_duration = action.substring(9).toInt();
+    }
   }
 }
 
@@ -138,4 +192,14 @@ void setRelay(int relayNum, bool on) {
   int pin = relayNum == 0 ? relay0Pin : relay1Pin;
 
   digitalWrite(pin, !on ? HIGH : LOW);
+}
+
+String msToTime(unsigned long ms) {
+  unsigned long totalSeconds = ms / 1000;
+  unsigned int minutes = totalSeconds / 60;
+  unsigned int seconds = totalSeconds % 60;
+
+  char buffer[6]; // "mm:ss" + null terminator
+  sprintf(buffer, "%u:%02u", minutes, seconds);
+  return String(buffer);
 }

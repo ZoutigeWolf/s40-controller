@@ -37,6 +37,11 @@ async def send_avrcp_periodically(serial: SerialConnection):
                 duration = track.get("Duration", 0)
                 position = track.get("Position", 0)
 
+                print(title)
+                print(artist)
+                print(duration)
+                print(position)
+
                 await serial.send(f"SET_TRACK;TITLE;{title}")
                 await serial.send(f"SET_TRACK;ARTIST;{artist}")
                 await serial.send(f"SET_TRACK;DURATION;{duration}")

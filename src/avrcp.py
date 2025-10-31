@@ -29,6 +29,8 @@ class AVRCPClient:
 
     def get_current(self):
         return {
+            "c": self.player.SupportedCapabilities,
             "status": self.player.Status,
-            "track": self.player.Track
+            "track": self.player.Track,
+            "position": self.player.Position
         }

@@ -4,84 +4,19 @@ from fastapi import FastAPI, Response
 from camilladsp import CamillaClient, CamillaError
 from contextlib import asynccontextmanager
 import asyncio
-import serial_asyncio
-from serial import SerialException
 
 from avrcp import AVRCPClient
+from serial_connection import SerialConnection
 
 load_dotenv()
 
-# -------------------------------
-# Camilla & AVRCP clients
-# -------------------------------
 camilla = CamillaClient(os.getenv("CAMILLA_HOST"), int(os.getenv("CAMILLA_PORT")))
 camilla.connect()
 avrcp = AVRCPClient()
+serial_conn = SerialConnection("/dev/ttyUSB0", 115200)
 
 power_state = False
 
-# -------------------------------
-# Serial connection wrapper
-# -------------------------------
-class SerialConnection:
-    def __init__(self, port: str, baudrate: int):
-        self.port = port
-        self.baudrate = baudrate
-        self.reader = None
-        self.writer = None
-        self.available = False
-
-    async def init(self):
-        if self.available:
-            return True
-        try:
-            self.reader, self.writer = await serial_asyncio.open_serial_connection(
-                url=self.port, baudrate=self.baudrate
-            )
-            self.available = True
-            print(f"[Serial] Connected to {self.port}")
-            return True
-        except (SerialException, FileNotFoundError):
-            self.available = False
-            print(f"[Serial] Not available: {self.port}")
-            return False
-
-    async def send(self, msg: str):
-        if not self.available:
-            # Try to init, but don't block startup
-            await self.init()
-            if not self.available:
-                return
-        try:
-            self.writer.write((msg + "\n").encode())
-            await self.writer.drain()
-        except Exception as e:
-            print(f"[Serial] Send error: {e}")
-            self.available = False
-
-    async def read_line(self) -> str:
-        if not self.available:
-            # Try to init
-            await self.init()
-            if not self.available:
-                await asyncio.sleep(0.5)
-                return ""
-        try:
-            line = await asyncio.wait_for(self.reader.readline(), timeout=0.5)
-            return line.decode()
-        except asyncio.TimeoutError:
-            return ""
-        except Exception as e:
-            print(f"[Serial] Read error: {e}")
-            self.available = False
-            return ""
-
-
-serial_conn = SerialConnection("/dev/ttyUSB0", 115200)
-
-# -------------------------------
-# Background tasks
-# -------------------------------
 async def read_serial(serial: SerialConnection):
     while True:
         line = await serial.read_line()
@@ -112,9 +47,6 @@ async def send_avrcp_periodically(serial: SerialConnection):
 
         await asyncio.sleep(0.5)
 
-# -------------------------------
-# FastAPI lifespan
-# -------------------------------
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     tasks = []
@@ -128,9 +60,6 @@ async def lifespan(_: FastAPI):
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-# -------------------------------
-# FastAPI app
-# -------------------------------
 app = FastAPI(lifespan=lifespan)
 
 async def handle_event(event: str):
@@ -151,9 +80,6 @@ async def handle_event(event: str):
     else:
         print(f"Unknown event: {event}")
 
-# -------------------------------
-# API endpoints
-# -------------------------------
 @app.get("/now-playing")
 async def now_playing():
     return avrcp.get_current()

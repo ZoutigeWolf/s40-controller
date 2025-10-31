@@ -66,13 +66,21 @@ serial_conn = SerialConnection(SERIAL_PORT, BAUD_RATE)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await serial_conn.init()
-    task = asyncio.create_task(read_serial(serial_conn))
+
+    serial_task = asyncio.create_task(read_serial(serial_conn))
+    avrcp_task = asyncio.create_task(send_avrcp_periodically(serial_conn))
+
     try:
         yield
     finally:
-        task.cancel()
+        serial_task.cancel()
+        avrcp_task.cancel()
         try:
-            await task
+            await serial_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await avrcp_task
         except asyncio.CancelledError:
             pass
 

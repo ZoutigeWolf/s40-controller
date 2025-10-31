@@ -25,7 +25,7 @@ bool powerState = false;
 AccessoryPower accessoryPowerState = AUTO;
 long powerGracePeriod = 10;
 float powerTimer = 0;
-
+unsigned long lastDisplayUpdate = 0;
 String track_title = "";
 String track_artist= "";
 long track_duration = 0;
@@ -36,6 +36,7 @@ void setup() {
   Serial.setTimeout(20);
 
   Wire.begin(21, 22);
+  Wire.setClock(400000);
   
   u8g2.begin();
 
@@ -64,8 +65,13 @@ void loop() {
   handleOpto();
   handlePowerState();
   handleSerial();
-  updateDisplay();
-  delay(5);
+
+  if (millis() - lastDisplayUpdate >= 500) {
+    updateDisplay();
+    lastDisplayUpdate = millis();
+  }
+
+  // delay(1);
 }
 
 void updateDisplay() {

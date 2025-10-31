@@ -50,7 +50,7 @@ async def send_avrcp_periodically(serial: SerialConnection):
         except Exception as e:
             print("AVRCP error:", e)
 
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):

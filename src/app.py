@@ -6,10 +6,14 @@ from contextlib import asynccontextmanager
 import asyncio
 import serial_asyncio
 
+from avrcp import AVRCPClient
+
 load_dotenv()
 
 camilla = CamillaClient(os.getenv("CAMILLA_HOST"), int(os.getenv("CAMILLA_PORT")))
 camilla.connect()
+
+avrcp = AVRCPClient()
 
 SERIAL_PORT = "/dev/ttyUSB0"
 BAUD_RATE = 115200
@@ -65,6 +69,10 @@ async def read_serial():
         event = line.decode().strip()
         await handle_event(event)
 
+@app.get("/now-playing")
+async def now_playing():
+    return avrcp.get_current()
+
 @app.get("/power")
 async def power():
     return power_state
@@ -76,7 +84,7 @@ async def get_config():
 
 
 @app.post("/config")
-async def get_config(config: dict):
+async def set_config(config: dict):
     try:
         config = camilla.config.validate(config)
         camilla.config.set_active(config)

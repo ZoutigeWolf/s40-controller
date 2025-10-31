@@ -29,7 +29,7 @@ class AVRCPClient:
 
     def get_current(self):
         print(self.player)
-        return self.player
+        return "nigga"
     
         return {
             "status": self.player.NowPlaying,

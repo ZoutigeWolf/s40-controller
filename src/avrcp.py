@@ -28,7 +28,9 @@ class AVRCPClient:
         self.player.Previous()
 
     def get_current(self):
+        return self.player
+    
         return {
-            "status": self.player.PlaybackStatus,
+            "status": self.player.NowPlaying,
             "track": self.player.Track
         }

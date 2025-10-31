@@ -30,12 +30,12 @@ async def read_serial(serial: SerialConnection):
 async def send_avrcp_periodically(serial: SerialConnection):
     while True:
         try:
-            track = avrcp.get_current()
-            if track:
-                title = track.get("Title", "")
-                artist = track.get("Artist", "")
-                duration = track.get("Duration", 0)
-                position = track.get("Position", 0)
+            data = avrcp.get_current()
+            if data:
+                title = data["track"].get("Title", "")
+                artist = data["track"].get("Artist", "")
+                duration = data["track"].get("Duration", 0)
+                position = data.get("Position", 0)
 
                 print(title)
                 print(artist)

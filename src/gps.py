@@ -26,22 +26,22 @@ class UbloxGPS(SerialConnection):
             ck_b = (ck_b + ck_a) & 0xFF
         return bytes([ck_a, ck_b])
 
-    def _send_ubx(self, msg_class, msg_id, payload):
+    async def _send_ubx(self, msg_class, msg_id, payload):
         length = struct.pack("<H", len(payload))
         header = b"\xb5\x62" + bytes([msg_class, msg_id]) + length + payload
         checksum = self._checksum(bytes([msg_class, msg_id]) + length + payload)
-        self.send(header + checksum)
+        await self.send(header + checksum)
 
-    def set_update_rate(self, rate_hz):
+    async def set_update_rate(self, rate_hz):
         measRate = int(1000 / rate_hz)
         payload = struct.pack("<HHH", measRate, 1, 0)
-        self._send_ubx(0x06, 0x08, payload)
+        await self._send_ubx(0x06, 0x08, payload)
 
-    def set_automotive_mode(self):
+    async def set_automotive_mode(self):
         payload = struct.pack("<HBB27s", 1, 4, 0, b"\x00" * 27)
-        self._send_ubx(0x06, 0x24, payload)
+        await self._send_ubx(0x06, 0x24, payload)
 
-    def set_constellations(self):
+    async def set_constellations(self):
         payload = bytearray(
             [
                 0, 1, 0, 0,   # GPS
@@ -50,15 +50,15 @@ class UbloxGPS(SerialConnection):
                 1, 1, 0, 0    # SBAS
             ]
         )
-        self._send_ubx(0x06, 0x3E, payload)
+        await self._send_ubx(0x06, 0x3E, payload)
 
-    def enable_sbas(self):
+    async def enable_sbas(self):
         payload = struct.pack("<BBBBBBBBBBBB", 1, 1, 0, 12, 0, 0, 0, 3, 0, 0, 0, 0)
-        self._send_ubx(0x06, 0x16, payload)
+        await self._send_ubx(0x06, 0x16, payload)
 
-    def save_to_eeprom(self):
+    async def save_to_eeprom(self):
         payload = struct.pack("<BBBBBBBB", 0xFF, 0xFF, 0, 0, 0, 0, 0, 0)
-        self._send_ubx(0x06, 0x09, payload)
+        await self._send_ubx(0x06, 0x09, payload)
 
     async def update(self):
         """

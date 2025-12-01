@@ -66,7 +66,7 @@ async def update_gps(serial: SerialConnection, db, gps: UbloxGPS):
     last_speed = 0
     while True:
         try:
-            data = gps.update()
+            data = await gps.update()
 
             timestamp = data["timestamp"]
             speed = math.floor(data["speed"])

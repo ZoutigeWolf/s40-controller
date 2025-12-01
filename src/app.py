@@ -45,21 +45,25 @@ async def send_avrcp_periodically(serial: SerialConnection):
     while True:
         try:
             data = avrcp.get_current()
-            if data:
-                title = data["track"].get("Title", "")
-                artist = data["track"].get("Artist", "")
-                duration = data["track"].get("Duration", 0)
-                position = data.get("position", 0)
 
-                await serial.send(f"SET_TRACK;TITLE;{title}")
-                await serial.send(f"SET_TRACK;ARTIST;{artist}")
-                await serial.send(f"SET_TRACK;DURATION;{duration}")
-                await serial.send(f"SET_TRACK;ELAPSED;{position}")
+            if data is None:
+                continue
+
+            title = data["track"].get("Title", "")
+            artist = data["track"].get("Artist", "")
+            duration = data["track"].get("Duration", 0)
+            position = data.get("position", 0)
+
+            await serial.send(f"SET_TRACK;TITLE;{title}")
+            await serial.send(f"SET_TRACK;ARTIST;{artist}")
+            await serial.send(f"SET_TRACK;DURATION;{duration}")
+            await serial.send(f"SET_TRACK;ELAPSED;{position}")
 
         except Exception as e:
             print("AVRCP error:", e)
 
-        await asyncio.sleep(1)
+        finally:
+            await asyncio.sleep(1)
 
 
 async def update_gps(serial: SerialConnection, db, gps: UbloxGPS):
@@ -67,6 +71,9 @@ async def update_gps(serial: SerialConnection, db, gps: UbloxGPS):
     while True:
         try:
             data = await gps.update()
+
+            if data is None:
+                continue
 
             timestamp = data["timestamp"]
             speed = math.floor(data["speed"])
@@ -97,7 +104,8 @@ async def update_gps(serial: SerialConnection, db, gps: UbloxGPS):
         except Exception as e:
             print("GPS error:", e)
 
-        await asyncio.sleep(0.2)
+        finally:
+            await asyncio.sleep(0.2)
 
 
 @asynccontextmanager

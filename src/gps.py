@@ -1,24 +1,22 @@
-import serial
 import struct
 from micropyGPS import MicropyGPS
 from datetime import datetime
 
+from serial_connection import SerialConnection
 
-class UbloxGPS:
-    def __init__(self, port: str, baud: int = 9600, refresh_rate: int = 5, timeout: float = 1):
-        self.port_name = port
-        self.baud = baud
+
+class UbloxGPS(SerialConnection):
+    def __init__(self, port: str, baudrate: int = 9600, refresh_rate: int = 5, timeout: float = 1):
+        super().__init__(port, baudrate)
         self.timeout = timeout
         self.refresh_rate = refresh_rate
-
         self.gps = MicropyGPS(location_formatting="dd")
-        self.ser = None
 
-        self._start()
-
-    # ---------------------------------------------------------
-    # ----------------- UBX HELPER FUNCTIONS ------------------
-    # ---------------------------------------------------------
+        self.set_update_rate(self.refresh_rate)
+        self.set_automotive_mode()
+        self.set_constellations()
+        self.enable_sbas()
+        self.save_to_eeprom()
 
     def _checksum(self, msg):
         ck_a = 0
@@ -32,11 +30,7 @@ class UbloxGPS:
         length = struct.pack("<H", len(payload))
         header = b"\xb5\x62" + bytes([msg_class, msg_id]) + length + payload
         checksum = self._checksum(bytes([msg_class, msg_id]) + length + payload)
-        self.ser.write(header + checksum)
-
-    # ---------------------------------------------------------
-    # ------------------- CONFIG FUNCTIONS --------------------
-    # ---------------------------------------------------------
+        self.send(header + checksum)
 
     def set_update_rate(self, rate_hz):
         measRate = int(1000 / rate_hz)
@@ -66,32 +60,15 @@ class UbloxGPS:
         payload = struct.pack("<BBBBBBBB", 0xFF, 0xFF, 0, 0, 0, 0, 0, 0)
         self._send_ubx(0x06, 0x09, payload)
 
-    # ---------------------------------------------------------
-    # --------------------- PUBLIC API -------------------------
-    # ---------------------------------------------------------
-
-    def _start(self):
-        """Open serial port and configure GPS."""
-        self.ser = serial.Serial(self.port_name, self.baud, timeout=self.timeout)
-
-        # Apply configuration
-        self.set_update_rate(self.refresh_rate_hz)
-        self.set_automotive_mode()
-        self.set_constellations()
-        self.enable_sbas()
-        self.save_to_eeprom()
-
-    def update(self):
+    async def update(self):
         """
         Call this at 5Hz.
         Reads characters from serial, updates micropyGPS,
         and returns a dict with data when a full sentence is parsed.
         """
 
-        if not self.ser:
-            raise RuntimeError("GPS not started. Call start().")
+        c = await self.read_line()
 
-        c = self.ser.read().decode("ascii", errors="replace")
         if not c:
             return None
 

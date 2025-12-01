@@ -131,13 +131,13 @@ async def handle_event(serial: SerialConnection, event: str):
         await serial.send(f"VOLUME;{volume}")
 
     if event == "VOLUME_UP":
-        volume = camilla.volume.main_volume() + 1
+        volume = math.floor(camilla.volume.main_volume() + 1)
         volume = 0 if volume > 0 else volume
         camilla.volume.set_main_volume(volume)
         await serial.send(f"VOLUME;{camilla.volume.main_volume()}")
 
     elif event == "VOLUME_DOWN":
-        volume = camilla.volume.main_volume() - 1
+        volume = math.floor(camilla.volume.main_volume() - 1)
         volume = -50 if volume < -50 else volume
         camilla.volume.set_main_volume(volume)
         await serial.send(f"VOLUME;{camilla.volume.main_volume()}")

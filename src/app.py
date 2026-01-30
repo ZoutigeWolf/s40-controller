@@ -1,7 +1,7 @@
 import math
 import os
-
 import psycopg2
+import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response
 from camilladsp import CamillaClient, CamillaError
@@ -168,7 +168,17 @@ async def handle_event(serial: SerialConnection, event: str):
             gain = math.floor(gain + 1)
             gain = 24 if gain > 24 else gain
             config["filters"]["Rear Bass"]["parameters"]["gain"] = gain
-            camilla.config.set_active(config)
+
+            path = camilla.config.file_path()
+
+            if path is None:
+                camilla.config.set_active(config)
+
+            else:
+                with open(path, "w") as f:
+                    f.write(yaml.dump(config))
+
+                camilla.general.reload()
 
         except (KeyError, TypeError):
             pass
@@ -181,7 +191,17 @@ async def handle_event(serial: SerialConnection, event: str):
             gain = math.floor(gain - 1)
             gain = -24 if gain < -24 else gain
             config["filters"]["Rear Bass"]["parameters"]["gain"] = gain
-            camilla.config.set_active(config)
+
+            path = camilla.config.file_path()
+
+            if path is None:
+                camilla.config.set_active(config)
+
+            else:
+                with open(path, "w") as f:
+                    f.write(yaml.dump(config))
+
+                camilla.general.reload()
 
         except (KeyError, TypeError):
             pass
@@ -191,7 +211,17 @@ async def handle_event(serial: SerialConnection, event: str):
 
         try:
             config["filters"]["Rear Bass"]["parameters"]["gain"] = 0
-            camilla.config.set_active(config)
+
+            path = camilla.config.file_path()
+
+            if path is None:
+                camilla.config.set_active(config)
+
+            else:
+                with open(path, "w") as f:
+                    f.write(yaml.dump(config))
+
+                camilla.general.reload()
 
         except (KeyError, TypeError):
             pass

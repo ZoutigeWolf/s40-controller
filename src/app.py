@@ -147,6 +147,55 @@ async def handle_event(serial: SerialConnection, event: str):
         camilla.volume.set_main_mute(muted)
         await serial.send(f"MUTE;{'ON' if muted else 'OFF'}")
 
+    elif event == "FRONT_BASS_UP":
+        volume = math.floor(camilla.volume.volume(1) + 1)
+        volume = 0 if volume > 0 else volume
+        camilla.volume.set_volume(1, volume)
+
+    elif event == "FRONT_BASS_DOWN":
+        volume = math.floor(camilla.volume.volume(1) - 1)
+        volume = -50 if volume < -50 else volume
+        camilla.volume.set_volume(1, volume)
+
+    elif event == "FRONT_BASS_MUTE":
+        camilla.volume.set_mute(1, not camilla.volume.mute(1))
+
+    elif event == "REAR_BASS_UP":
+        config = camilla.config.active()
+
+        try:
+            gain = config["filters"]["Rear Bass"]["parameters"]["gain"]
+            gain = math.floor(gain + 1)
+            gain = 24 if gain > 24 else gain
+            config["filters"]["Rear Bass"]["parameters"]["gain"] = gain
+            camilla.config.set_active(config)
+
+        except (KeyError, TypeError):
+            pass
+
+    elif event == "REAR_BASS_DOWN":
+        config = camilla.config.active()
+
+        try:
+            gain = config["filters"]["Rear Bass"]["parameters"]["gain"]
+            gain = math.floor(gain - 1)
+            gain = -24 if gain < -24 else gain
+            config["filters"]["Rear Bass"]["parameters"]["gain"] = gain
+            camilla.config.set_active(config)
+
+        except (KeyError, TypeError):
+            pass
+
+    elif event == "REAR_BASS_RESET":
+        config = camilla.config.active()
+
+        try:
+            config["filters"]["Rear Bass"]["parameters"]["gain"] = 0
+            camilla.config.set_active(config)
+
+        except (KeyError, TypeError):
+            pass
+
     elif event == "POWER_ON":
         power_state = True
 

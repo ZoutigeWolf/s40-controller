@@ -1,0 +1,222 @@
+description: null
+devices:
+  adjust_period: null
+  capture:
+    channels: 2
+    device: hw:Loopback,1,0
+    format: S16LE
+    labels:
+    - L
+    - R
+    link_mute_control: null
+    link_volume_control: null
+    stop_on_inactive: null
+    type: Alsa
+  capture_samplerate: 44100
+  chunksize: 1024
+  enable_rate_adjust: null
+  multithreaded: null
+  playback:
+    channels: 8
+    device: hw:sndrpihifiberry,0,0
+    format: S32LE
+    type: Alsa
+  queuelimit: null
+  rate_measure_interval: null
+  resampler: null
+  samplerate: 44100
+  silence_threshold: null
+  silence_timeout: null
+  stop_on_rate_change: null
+  target_level: null
+  volume_limit: null
+  volume_ramp_time: 0
+  worker_threads: null
+filters:
+  Front Bass:
+    description: null
+    parameters:
+      freq: 150
+      gain: 4
+      q: 0.7
+      type: Lowshelf
+    type: Biquad
+  Front Sub Volume:
+    description: null
+    parameters:
+      fader: Aux1
+      limit: null
+      ramp_time: 0
+    type: Volume
+  Front Treble:
+    description: null
+    parameters:
+      freq: 2000
+      gain: 0
+      q: 0.7
+      type: Highshelf
+    type: Biquad
+  Limiter:
+    description: null
+    parameters:
+      clip_limit: 0
+      soft_clip: true
+    type: Limiter
+  Rear Bass:
+    description: null
+    parameters:
+      freq: 150
+      gain: 12
+      q: 0.7
+      type: Lowshelf
+    type: Biquad
+  Rear Delay:
+    description: null
+    parameters:
+      delay: 10
+      subsample: true
+      unit: ms
+    type: Delay
+  Rear Sub Volume:
+    description: null
+    parameters:
+      fader: Aux2
+      limit: null
+      ramp_time: 0
+    type: Volume
+  Rear Treble:
+    description: null
+    parameters:
+      freq: 2000
+      gain: 0
+      q: 0.7
+      type: Highshelf
+    type: Biquad
+mixers:
+  Car:
+    channels:
+      in: 2
+      out: 8
+    description: null
+    labels:
+    - FL
+    - FR
+    - RL
+    - RR
+    - SUBFL
+    - SUBFR
+    - SUBRL
+    - SUBRR
+    mapping:
+    - dest: 2
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 3
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 4
+      mute: false
+      sources:
+      - channel: 0
+        gain: 6
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 1
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 0
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 5
+      mute: false
+      sources:
+      - channel: 1
+        gain: 6
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 6
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 7
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+pipeline:
+- bypassed: null
+  description: null
+  name: Car
+  type: Mixer
+- bypassed: false
+  channels:
+  - 1
+  - 0
+  description: null
+  names:
+  - Front Bass
+  - Front Treble
+  type: Filter
+- bypassed: false
+  channels:
+  - 2
+  - 3
+  description: null
+  names:
+  - Rear Bass
+  - Rear Treble
+  - Rear Delay
+  type: Filter
+- bypassed: false
+  channels:
+  - 4
+  - 5
+  description: null
+  names:
+  - Front Sub Volume
+  type: Filter
+- bypassed: null
+  channels: null
+  description: null
+  names:
+  - Limiter
+  type: Filter
+- bypassed: null
+  channels:
+  - 6
+  - 7
+  description: null
+  names:
+  - Rear Sub Volume
+  type: Filter
+processors: {}
+title: Bluetooth
